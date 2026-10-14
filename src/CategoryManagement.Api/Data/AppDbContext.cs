@@ -18,7 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.ToTable("categories", table =>
             {
-                table.HasCheckConstraint("CK_categories_level", "\"level\" BETWEEN 1 AND 3");
+                table.HasCheckConstraint("CK_categories_level", "[level] BETWEEN 1 AND 3");
             });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
@@ -28,8 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.ParentId).HasColumnName("parent_id");
             entity.Property(x => x.Level).HasColumnName("level").IsRequired();
             entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasOne(x => x.Parent)
                 .WithMany(x => x.Children)
                 .HasForeignKey(x => x.ParentId)
@@ -40,8 +40,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.ToTable("products", table =>
             {
-                table.HasCheckConstraint("CK_products_price", "\"price\" >= 0");
-                table.HasCheckConstraint("CK_products_stock", "\"stock_quantity\" >= 0");
+                table.HasCheckConstraint("CK_products_price", "[price] >= 0");
+                table.HasCheckConstraint("CK_products_stock", "[stock_quantity] >= 0");
             });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
@@ -52,8 +52,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.StockQuantity).HasColumnName("stock_quantity").HasDefaultValue(0);
             entity.Property(x => x.CategoryId).HasColumnName("category_id");
             entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasIndex(x => x.CategoryId);
             entity.HasOne(x => x.Category)
                 .WithMany()

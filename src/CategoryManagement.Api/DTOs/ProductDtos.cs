@@ -17,7 +17,6 @@ public sealed class CreateProductRequest
     [Range(typeof(decimal), "0", "999999999")]
     public decimal Price { get; set; }
 
-    [Url]
     [StringLength(1000)]
     public string? ImageUrl { get; set; }
 
@@ -39,7 +38,6 @@ public sealed class UpdateProductRequest
     [Range(typeof(decimal), "0", "999999999")]
     public decimal Price { get; set; }
 
-    [Url]
     [StringLength(1000)]
     public string? ImageUrl { get; set; }
 
@@ -64,4 +62,11 @@ public sealed record ProductResponse(
     string CategoryName,
     bool IsActive,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    short CategoryLevel = 1,
+    string? CategoryPath = null);
+
+public sealed record ImageUploadResponse(
+    string ImageUrl,
+    string FileName,
+    long Size);

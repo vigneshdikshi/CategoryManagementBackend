@@ -21,7 +21,9 @@ public class TestApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((context, config) =>
         {
             var connection = Environment.GetEnvironmentVariable(
-                "ConnectionStrings__DefaultConnection")
+                "ConnectionStrings__TestConnection")
+                ?? Environment.GetEnvironmentVariable(
+                    "ConnectionStrings__DefaultConnection")
                 ?? Environment.GetEnvironmentVariable(
                     "ConnectionStrings__DefaultConnection",
                     EnvironmentVariableTarget.User)
@@ -30,12 +32,24 @@ public class TestApiFactory : WebApplicationFactory<Program>
                     EnvironmentVariableTarget.Machine);
 
             if (string.IsNullOrWhiteSpace(connection) ||
+                !connection.Contains("Database=CategoryManagementDB_Test", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseConn = context.Configuration.GetConnectionString("DefaultConnection")
+                    ?? "Server=.;Database=DIKSHIKART;Integrated Security=True;TrustServerCertificate=True;";
+                connection = System.Text.RegularExpressions.Regex.Replace(
+                    baseConn,
+                    @"Database=[^;]+",
+                    "Database=CategoryManagementDB_Test",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            }
+
+            if (string.IsNullOrWhiteSpace(connection) ||
                 !connection.Contains(
-                    "Database=category_management_test",
+                    "Database=CategoryManagementDB_Test",
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    "Tests require the dedicated category_management_test database.");
+                    "Tests require the dedicated CategoryManagementDB_Test database.");
             }
 
             config.AddInMemoryCollection(
@@ -471,52 +485,64 @@ public class CategoryApiTests : IClassFixture<TestApiFactory>
     #region Product Integration Tests
 
     [Fact]
-    public async Task CreateProduct_AssignedToLevel1Category_ShouldReturn409Conflict()
+    public async Task CreateProduct_AssignedToLevel1Category_ShouldSucceed()
     {
         var l1 = await CreateCategoryAsync();
+        var prodId = GetUniqueTestId();
         try
         {
             var response = await _client.PostAsJsonAsync(
                 "/api/products",
                 new CreateProductRequest
                 {
-                    Id = GetUniqueTestId(),
+                    Id = prodId,
                     Name = "Product L1 " + Guid.NewGuid().ToString("N")[..8],
                     Price = 15.00m,
                     StockQuantity = 10,
                     CategoryId = l1.Id
                 });
 
-            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var prod = await response.Content.ReadFromJsonAsync<ProductResponse>();
+            Assert.NotNull(prod);
+            Assert.Equal(l1.Id, prod.CategoryId);
+            Assert.Equal((short)1, prod.CategoryLevel);
         }
         finally
         {
+            await HardDeleteProductAsync(prodId);
             await DeleteCategorySafeAsync(l1.Id);
         }
     }
 
     [Fact]
-    public async Task CreateProduct_AssignedToLevel2Category_ShouldReturn409Conflict()
+    public async Task CreateProduct_AssignedToLevel2Category_ShouldSucceed()
     {
         var l1 = await CreateCategoryAsync();
         var l2 = await CreateCategoryAsync(parentId: l1.Id);
+        var prodId = GetUniqueTestId();
         try
         {
             var response = await _client.PostAsJsonAsync(
                 "/api/products",
                 new CreateProductRequest
                 {
-                    Id = GetUniqueTestId(),
+                    Id = prodId,
                     Name = "Product L2 " + Guid.NewGuid().ToString("N")[..8],
                     Price = 15.00m,
                     StockQuantity = 10,
                     CategoryId = l2.Id
                 });
 
-            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var prod = await response.Content.ReadFromJsonAsync<ProductResponse>();
+            Assert.NotNull(prod);
+            Assert.Equal(l2.Id, prod.CategoryId);
+            Assert.Equal((short)2, prod.CategoryLevel);
         }
         finally
         {
+            await HardDeleteProductAsync(prodId);
             await DeleteCategorySafeAsync(l2.Id);
             await DeleteCategorySafeAsync(l1.Id);
         }
@@ -720,7 +746,7 @@ public class CategoryApiTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task UpdateProduct_ToLevel1OrLevel2Category_ShouldReturn409Conflict()
+    public async Task UpdateProduct_ToLevel1OrLevel2Category_ShouldSucceed()
     {
         var (l1, l2, l3) = await CreateCategoryHierarchyAsync();
         long? prodId = null;
@@ -739,7 +765,10 @@ public class CategoryApiTests : IClassFixture<TestApiFactory>
                     CategoryId = l1.Id,
                     IsActive = true
                 });
-            Assert.Equal(HttpStatusCode.Conflict, updateToL1.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, updateToL1.StatusCode);
+            var updated1 = await updateToL1.Content.ReadFromJsonAsync<ProductResponse>();
+            Assert.Equal(l1.Id, updated1!.CategoryId);
+            Assert.Equal((short)1, updated1.CategoryLevel);
 
             var updateToL2 = await _client.PutAsJsonAsync(
                 $"/api/products/{product.Id}",
@@ -751,7 +780,10 @@ public class CategoryApiTests : IClassFixture<TestApiFactory>
                     CategoryId = l2.Id,
                     IsActive = true
                 });
-            Assert.Equal(HttpStatusCode.Conflict, updateToL2.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, updateToL2.StatusCode);
+            var updated2 = await updateToL2.Content.ReadFromJsonAsync<ProductResponse>();
+            Assert.Equal(l2.Id, updated2!.CategoryId);
+            Assert.Equal((short)2, updated2.CategoryLevel);
         }
         finally
         {
@@ -760,6 +792,36 @@ public class CategoryApiTests : IClassFixture<TestApiFactory>
             await DeleteCategorySafeAsync(l2.Id);
             await DeleteCategorySafeAsync(l1.Id);
         }
+    }
+
+    [Fact]
+    public async Task UploadProductImage_ValidFile_ShouldSucceedAndReturnPath()
+    {
+        using var content = new MultipartFormDataContent();
+        var fileBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }; // PNG magic bytes
+        var fileContent = new ByteArrayContent(fileBytes);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        content.Add(fileContent, "file", "test_item.png");
+
+        var response = await _client.PostAsync("/api/products/upload-image", content);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<ImageUploadResponse>();
+        Assert.NotNull(result);
+        Assert.StartsWith("/uploads/products/", result.ImageUrl);
+        Assert.EndsWith(".png", result.ImageUrl);
+    }
+
+    [Fact]
+    public async Task UploadProductImage_InvalidExtension_ShouldReturn400BadRequest()
+    {
+        using var content = new MultipartFormDataContent();
+        var fileBytes = System.Text.Encoding.UTF8.GetBytes("not an image");
+        var fileContent = new ByteArrayContent(fileBytes);
+        content.Add(fileContent, "file", "bad_script.bat");
+
+        var response = await _client.PostAsync("/api/products/upload-image", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

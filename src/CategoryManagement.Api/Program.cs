@@ -30,8 +30,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "Connection string 'DefaultConnection' is missing. Configure it in appsettings.json or ConnectionStrings__DefaultConnection.");
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
+    var config = serviceProvider.GetRequiredService<IConfiguration>();
+    var resolvedConnectionString = config.GetConnectionString("DefaultConnection") ?? connectionString;
+    options.UseSqlServer(resolvedConnectionString);
+});
 
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -56,8 +60,20 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
 app.UseCors("DevelopmentClients");
+
+var uploadsDir = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "uploads", "products");
+if (!Directory.Exists(uploadsDir))
+{
+    Directory.CreateDirectory(uploadsDir);
+}
+
+app.UseStaticFiles();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new

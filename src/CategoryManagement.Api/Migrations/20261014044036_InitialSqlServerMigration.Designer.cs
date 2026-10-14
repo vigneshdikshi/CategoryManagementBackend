@@ -3,17 +3,17 @@ using System;
 using CategoryManagement.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
 namespace CategoryManagement.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261013084715_ManualIdsAndCategoryCodeSeq")]
-    partial class ManualIdsAndCategoryCodeSeq
+    [Migration("20261014044036_InitialSqlServerMigration")]
+    partial class InitialSqlServerMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,9 +21,9 @@ namespace CategoryManagement.Api.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.0")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.HasSequence("category_code_seq");
 
@@ -36,18 +36,18 @@ namespace CategoryManagement.Api.Migrations
                     b.Property<string>("CategoryCode")
                         .IsRequired()
                         .HasMaxLength(5)
-                        .HasColumnType("character varying(5)")
+                        .HasColumnType("nvarchar(5)")
                         .HasColumnName("category_code");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at_utc")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
+                        .HasColumnType("bit")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
@@ -58,7 +58,7 @@ namespace CategoryManagement.Api.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("nvarchar(100)")
                         .HasColumnName("name");
 
                     b.Property<long?>("ParentId")
@@ -67,9 +67,9 @@ namespace CategoryManagement.Api.Migrations
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at_utc")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.HasKey("Id");
 
@@ -80,7 +80,7 @@ namespace CategoryManagement.Api.Migrations
 
                     b.ToTable("categories", null, t =>
                         {
-                            t.HasCheckConstraint("CK_categories_level", "\"level\" BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("CK_categories_level", "[level] BETWEEN 1 AND 3");
                         });
                 });
 
@@ -96,48 +96,48 @@ namespace CategoryManagement.Api.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("datetime2")
                         .HasColumnName("created_at_utc")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
+                        .HasColumnType("nvarchar(2000)")
                         .HasColumnName("description");
 
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
+                        .HasColumnType("nvarchar(1000)")
                         .HasColumnName("image_url");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
+                        .HasColumnType("bit")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
+                        .HasColumnType("nvarchar(150)")
                         .HasColumnName("name");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)")
+                        .HasColumnType("decimal(12,2)")
                         .HasColumnName("price");
 
                     b.Property<int>("StockQuantity")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
+                        .HasColumnType("int")
                         .HasDefaultValue(0)
                         .HasColumnName("stock_quantity");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("datetime2")
                         .HasColumnName("updated_at_utc")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.HasKey("Id");
 
@@ -145,9 +145,9 @@ namespace CategoryManagement.Api.Migrations
 
                     b.ToTable("products", null, t =>
                         {
-                            t.HasCheckConstraint("CK_products_price", "\"price\" >= 0");
+                            t.HasCheckConstraint("CK_products_price", "[price] >= 0");
 
-                            t.HasCheckConstraint("CK_products_stock", "\"stock_quantity\" >= 0");
+                            t.HasCheckConstraint("CK_products_stock", "[stock_quantity] >= 0");
                         });
                 });
 

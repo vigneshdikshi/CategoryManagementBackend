@@ -63,4 +63,51 @@ public class ProductsController(IProductService service) : ControllerBase
         var deleted = await service.DeleteAsync(id, ct);
         return deleted ? NoContent() : NotFound(new { message = $"Product {id} was not found." });
     }
+
+    [HttpPost("upload-image")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ImageUploadResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ImageUploadResponse>> UploadImage(
+        IFormFile? file,
+        [FromServices] IWebHostEnvironment env,
+        CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No image file was uploaded." });
+        }
+
+        // Limit size to 5 MB
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Length > maxBytes)
+        {
+            return BadRequest(new { message = "Image file size exceeds the 5 MB limit." });
+        }
+
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (string.IsNullOrEmpty(ext) || !allowedExtensions.Contains(ext))
+        {
+            return BadRequest(new { message = $"Unsupported image format. Allowed formats: {string.Join(", ", allowedExtensions)}" });
+        }
+
+        var rootPath = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+        var uploadDir = Path.Combine(rootPath, "uploads", "products");
+        if (!Directory.Exists(uploadDir))
+        {
+            Directory.CreateDirectory(uploadDir);
+        }
+
+        var uniqueFileName = $"{Guid.NewGuid():N}{ext}";
+        var filePath = Path.Combine(uploadDir, uniqueFileName);
+
+        await using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        var relativeUrl = $"/uploads/products/{uniqueFileName}";
+        return Ok(new ImageUploadResponse(relativeUrl, file.FileName, file.Length));
+    }
 }

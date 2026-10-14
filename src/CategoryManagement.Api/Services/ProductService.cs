@@ -10,7 +10,11 @@ public class ProductService(AppDbContext db) : IProductService
     public async Task<IReadOnlyList<ProductResponse>> GetAllAsync(
         string? categoryCode, bool includeInactive, int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Products.AsNoTracking().Include(p => p.Category).AsQueryable();
+        var query = db.Products.AsNoTracking()
+            .Include(p => p.Category)
+                .ThenInclude(c => c!.Parent)
+                    .ThenInclude(c => c!.Parent)
+            .AsQueryable();
 
         if (!includeInactive) query = query.Where(p => p.IsActive);
         if (!string.IsNullOrWhiteSpace(categoryCode))
@@ -29,7 +33,10 @@ public class ProductService(AppDbContext db) : IProductService
 
     public async Task<ProductResponse?> GetByIdAsync(long id, CancellationToken ct)
     {
-        var item = await db.Products.AsNoTracking().Include(p => p.Category)
+        var item = await db.Products.AsNoTracking()
+            .Include(p => p.Category)
+                .ThenInclude(c => c!.Parent)
+                    .ThenInclude(c => c!.Parent)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
         return item is null ? null : ToResponse(item);
     }
@@ -43,11 +50,14 @@ public class ProductService(AppDbContext db) : IProductService
         if (existing)
             throw new InvalidOperationException($"Product with ID {request.Id} already exists.");
 
-        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == request.CategoryId, ct);
+        var category = await db.Categories
+            .Include(c => c.Parent)
+                .ThenInclude(c => c!.Parent)
+            .FirstOrDefaultAsync(c => c.Id == request.CategoryId, ct);
         if (category is null)
             throw new KeyNotFoundException($"Category ID {request.CategoryId} was not found.");
-        if (category.Level != 3)
-            throw new InvalidOperationException("Products must be assigned to a Level 3 category.");
+        if (category.Level < 1 || category.Level > 3)
+            throw new InvalidOperationException("Products must be assigned to a Level 1, 2, or 3 category.");
         if (!category.IsActive)
             throw new InvalidOperationException("Cannot add a product to an inactive category.");
 
@@ -73,14 +83,21 @@ public class ProductService(AppDbContext db) : IProductService
 
     public async Task<ProductResponse?> UpdateAsync(long id, UpdateProductRequest request, CancellationToken ct)
     {
-        var product = await db.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id, ct);
+        var product = await db.Products
+            .Include(p => p.Category)
+                .ThenInclude(c => c!.Parent)
+                    .ThenInclude(c => c!.Parent)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null) return null;
 
-        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == request.CategoryId, ct);
+        var category = await db.Categories
+            .Include(c => c.Parent)
+                .ThenInclude(c => c!.Parent)
+            .FirstOrDefaultAsync(c => c.Id == request.CategoryId, ct);
         if (category is null)
             throw new KeyNotFoundException($"Category ID {request.CategoryId} was not found.");
-        if (category.Level != 3)
-            throw new InvalidOperationException("Products must be assigned to a Level 3 category.");
+        if (category.Level < 1 || category.Level > 3)
+            throw new InvalidOperationException("Products must be assigned to a Level 1, 2, or 3 category.");
         if (!category.IsActive)
             throw new InvalidOperationException("Cannot assign a product to an inactive category.");
 
@@ -110,8 +127,28 @@ public class ProductService(AppDbContext db) : IProductService
         return true;
     }
 
-    private static ProductResponse ToResponse(Product p) => new(
-        p.Id, p.Name, p.Description, p.Price, p.ImageUrl, p.StockQuantity,
-        p.CategoryId, p.Category?.CategoryCode ?? string.Empty,
-        p.Category?.Name ?? string.Empty, p.IsActive, p.CreatedAtUtc, p.UpdatedAtUtc);
+    private static ProductResponse ToResponse(Product p)
+    {
+        var cat = p.Category;
+        var level = cat?.Level ?? 1;
+        var path = GetCategoryPath(cat);
+        return new(
+            p.Id, p.Name, p.Description, p.Price, p.ImageUrl, p.StockQuantity,
+            p.CategoryId, cat?.CategoryCode ?? string.Empty,
+            cat?.Name ?? string.Empty, p.IsActive, p.CreatedAtUtc, p.UpdatedAtUtc,
+            level, path);
+    }
+
+    private static string GetCategoryPath(Category? c)
+    {
+        if (c == null) return string.Empty;
+        var parts = new List<string>();
+        var curr = c;
+        while (curr != null)
+        {
+            parts.Insert(0, curr.Name);
+            curr = curr.Parent;
+        }
+        return string.Join(" > ", parts);
+    }
 }

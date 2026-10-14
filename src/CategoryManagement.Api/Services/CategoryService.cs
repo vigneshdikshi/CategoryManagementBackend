@@ -1,6 +1,8 @@
+using System.Data;
 using CategoryManagement.Api.Data;
 using CategoryManagement.Api.DTOs;
 using CategoryManagement.Api.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace CategoryManagement.Api.Services;
@@ -64,9 +66,17 @@ public class CategoryService(AppDbContext db) : ICategoryService
             level = (short)(parent.Level + 1);
         }
 
-        var nextCodeNumber = await db.Database.SqlQueryRaw<long>(
-            "SELECT nextval('category_code_seq') AS \"Value\"")
-            .FirstAsync(ct);
+        var resultParam = new SqlParameter
+        {
+            ParameterName = "@Value",
+            SqlDbType = SqlDbType.BigInt,
+            Direction = ParameterDirection.Output
+        };
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT @Value = NEXT VALUE FOR category_code_seq",
+            new[] { resultParam },
+            ct);
+        var nextCodeNumber = (long)(resultParam.Value ?? 0L);
 
         if (nextCodeNumber > 99999)
         {
